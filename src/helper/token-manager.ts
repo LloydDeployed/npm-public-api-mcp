@@ -50,17 +50,41 @@ function detectTokenMode(): TokenMode {
 }
 
 /**
+ * Resolve the complete Authorization header used for token requests.
+ * A prebuilt header is passed through unchanged so secret-proxy sentinels are
+ * not transformed before reaching the HTTP boundary.
+ */
+function getTokenAuthorizationHeader(): string {
+  const authorizationHeader = process.env.EBAY_AUTHORIZATION_HEADER;
+  if (authorizationHeader) {
+    return authorizationHeader;
+  }
+
+  const clientId = process.env.EBAY_CLIENT_ID;
+  const clientSecret = process.env.EBAY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Token configuration error: EBAY_CLIENT_ID and EBAY_CLIENT_SECRET are required when EBAY_AUTHORIZATION_HEADER is not set"
+    );
+  }
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  return `Basic ${credentials}`;
+}
+
+/**
  * Validate token configuration based on mode
  * Throws error if required environment variables are missing
  */
 function validateTokenConfiguration(mode: TokenMode): void {
+  const authorizationHeader = process.env.EBAY_AUTHORIZATION_HEADER;
   const clientId = process.env.EBAY_CLIENT_ID;
   const clientSecret = process.env.EBAY_CLIENT_SECRET;
 
-  // Client ID and Secret are required for both modes
-  if (!clientId || !clientSecret) {
+  // Either a complete header or Client ID and Secret are required for both modes
+  if (!authorizationHeader && (!clientId || !clientSecret)) {
     throw new Error(
-      "Token configuration error: EBAY_CLIENT_ID and EBAY_CLIENT_SECRET are required for both user and application token modes"
+      "Token configuration error: EBAY_CLIENT_ID and EBAY_CLIENT_SECRET are required for both user and application token modes when EBAY_AUTHORIZATION_HEADER is not set"
     );
   }
 
@@ -189,17 +213,15 @@ export async function refreshAccessToken(): Promise<string> {
 async function fetchUserToken(): Promise<{ token: string; expiresIn: number }> {
   const refreshToken = process.env.EBAY_REFRESH_TOKEN;
   const clientId = process.env.EBAY_CLIENT_ID;
-  const clientSecret = process.env.EBAY_CLIENT_SECRET;
 
   // Configuration should already be validated in initializeTokenManager
-  if (!refreshToken || !clientId || !clientSecret) {
+  if (!refreshToken) {
     throw new Error("Cannot fetch user token: Missing required configuration (this should have been caught during initialization)");
   }
 
   logger.info("Fetching user token using refresh_token...");
 
-  // Prepare Basic auth credentials
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const authorizationHeader = getTokenAuthorizationHeader();
 
   // Prepare request body for refresh_token grant
   // Note: scope is intentionally omitted - refresh_token grants inherit scopes from the original token
@@ -215,7 +237,8 @@ async function fetchUserToken(): Promise<{ token: string; expiresIn: number }> {
     endpoint: tokenEndpoint,
     grantType: "refresh_token",
     refreshTokenLength: refreshToken.length,
-    clientIdLength: clientId.length,
+    credentialSource: process.env.EBAY_AUTHORIZATION_HEADER ? "authorization_header" : "client_credentials",
+    clientIdLength: clientId?.length,
   });
 
   // Make the token request
@@ -226,7 +249,7 @@ async function fetchUserToken(): Promise<{ token: string; expiresIn: number }> {
       timeout: 10000,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${credentials}`,
+        "Authorization": authorizationHeader,
       },
     }
   );
@@ -254,20 +277,14 @@ async function fetchUserToken(): Promise<{ token: string; expiresIn: number }> {
  */
 async function fetchApplicationToken(): Promise<{ token: string; expiresIn: number }> {
   const clientId = process.env.EBAY_CLIENT_ID;
-  const clientSecret = process.env.EBAY_CLIENT_SECRET;
   const userScopes = process.env.EBAY_REQUIRED_SCOPES;
-
-  if (!clientId || !clientSecret) {
-    throw new Error("Cannot fetch application token: Missing required configuration");
-  }
 
   logger.info("Fetching application token using client_credentials...");
 
   // Use user-provided scopes if available, otherwise default to base public scope
   const applicationScope = userScopes || "https://api.ebay.com/oauth/api_scope";
 
-  // Prepare Basic auth credentials
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const authorizationHeader = getTokenAuthorizationHeader();
 
   // Prepare request body for client_credentials grant
   const params = new URLSearchParams();
@@ -282,7 +299,8 @@ async function fetchApplicationToken(): Promise<{ token: string; expiresIn: numb
     endpoint: tokenEndpoint,
     grantType: "client_credentials",
     scopes: applicationScope,
-    clientIdLength: clientId.length,
+    credentialSource: process.env.EBAY_AUTHORIZATION_HEADER ? "authorization_header" : "client_credentials",
+    clientIdLength: clientId?.length,
   });
 
   // Make the token request
@@ -293,7 +311,7 @@ async function fetchApplicationToken(): Promise<{ token: string; expiresIn: numb
       timeout: 10000,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${credentials}`,
+        "Authorization": authorizationHeader,
       },
     }
   );

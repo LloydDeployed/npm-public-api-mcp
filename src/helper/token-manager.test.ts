@@ -25,6 +25,7 @@ describe('token-manager', () => {
 
     // Reset environment
     process.env = { ...originalEnv };
+    delete process.env.EBAY_AUTHORIZATION_HEADER;
     process.env.EBAY_CLIENT_ID = 'test-client-id';
     process.env.EBAY_CLIENT_SECRET = 'test-client-secret';
     process.env.EBAY_TOKEN_TYPE = 'application';
@@ -55,6 +56,14 @@ describe('token-manager', () => {
     it('should throw error when client credentials are missing', () => {
       delete process.env.EBAY_CLIENT_ID;
       expect(() => tokenManager.initializeTokenManager()).toThrow(/EBAY_CLIENT_ID and EBAY_CLIENT_SECRET are required/);
+    });
+
+    it('should initialize with a complete authorization header instead of client credentials', () => {
+      delete process.env.EBAY_CLIENT_ID;
+      delete process.env.EBAY_CLIENT_SECRET;
+      process.env.EBAY_AUTHORIZATION_HEADER = 'protected-header-sentinel';
+
+      expect(() => tokenManager.initializeTokenManager()).not.toThrow();
     });
 
     it('should throw error when user mode missing refresh token', () => {
@@ -88,6 +97,32 @@ describe('token-manager', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': expect.stringContaining('Basic'),
+          }),
+        })
+      );
+    });
+
+    it('should send a complete authorization header without transforming it', async () => {
+      const authorizationHeader = 'protected-header-sentinel';
+      process.env.EBAY_AUTHORIZATION_HEADER = authorizationHeader;
+      delete process.env.EBAY_CLIENT_ID;
+      delete process.env.EBAY_CLIENT_SECRET;
+      tokenManager.initializeTokenManager();
+      mockedAxios.post.mockResolvedValueOnce({
+        data: {
+          access_token: 'new-token',
+          expires_in: 7200,
+        },
+      });
+
+      await tokenManager.getAccessToken();
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/identity/v1/oauth2/token'),
+        expect.stringContaining('grant_type=client_credentials'),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': authorizationHeader,
           }),
         })
       );

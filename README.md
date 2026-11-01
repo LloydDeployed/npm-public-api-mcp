@@ -97,6 +97,32 @@ Add this configuration to your MCP client's config file. The server runs via `np
 ```
 **Note:** `EBAY_REQUIRED_SCOPES` is optional; omit it to default to `https://api.ebay.com/oauth/api_scope`.
 
+**Protected complete-header mode:**
+
+Clients whose secret proxy requires an outbound value to remain unchanged can
+provide the complete token-request Authorization header instead of separate
+client credentials:
+
+```json
+{
+  "mcpServers": {
+    "ebay-api": {
+      "command": "node",
+      "args": ["/absolute/path/to/npm-public-api-mcp/dist/index.js"],
+      "env": {
+        "EBAY_AUTHORIZATION_HEADER": "protected-secret-reference",
+        "EBAY_TOKEN_TYPE": "application",
+        "EBAY_API_ENV": "production"
+      }
+    }
+  }
+}
+```
+
+The value must resolve to the complete `Authorization` header accepted by
+eBay's token endpoint. It is passed to the HTTP client without encoding or
+prefixing. Do not store the resolved credential in plaintext configuration.
+
 **Claude Code:**
 
 Use `claude mcp add` to register the server. Use `--scope user` for all projects or `--scope project` for the current project only.
@@ -169,8 +195,9 @@ Restart your MCP client to load the server.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `EBAY_CLIENT_ID` | ✅ Yes | eBay application Client ID |
-| `EBAY_CLIENT_SECRET` | ✅ Yes | eBay application Client Secret |
+| `EBAY_CLIENT_ID` | Conditional | eBay application Client ID; required with `EBAY_CLIENT_SECRET` when `EBAY_AUTHORIZATION_HEADER` is not set |
+| `EBAY_CLIENT_SECRET` | Conditional | eBay application Client Secret; required with `EBAY_CLIENT_ID` when `EBAY_AUTHORIZATION_HEADER` is not set |
+| `EBAY_AUTHORIZATION_HEADER` | Alternative | Complete token-request Authorization header; replaces `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` when set |
 | `EBAY_TOKEN_TYPE` | No | `"application"` (default) or `"user"` |
 | `EBAY_REFRESH_TOKEN` | Conditional | Required when `EBAY_TOKEN_TYPE="user"` |
 | `EBAY_REQUIRED_SCOPES` | No | OAuth scopes (Application Token mode only). For multiple scopes, separate them with spaces, e.g., `"https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.inventory"` |

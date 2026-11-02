@@ -205,7 +205,24 @@ Restart your MCP client to load the server.
 
 ## Tools and Prompts
 
-This server exposes four primary tools and two MCP prompts to your AI assistant.
+This server exposes five primary tools and two MCP prompts to your AI assistant.
+
+### `search_and_compare_items` — Compact Listing Comparison
+
+Searches active fixed-price Browse API listings without a separate schema-discovery call. It returns compact comparisons sorted by known delivered cost, including condition, seller feedback, canonical item URL, and computer-spec hints extracted from titles. Shipping that eBay calculates at checkout remains explicitly unknown.
+
+Use `mustInclude` and `mustExclude` to reject near-matches that eBay's relevance search may return. Terms ignore spacing and punctuation, so `16GB` also matches `16 GB`.
+
+```json
+{
+  "query": "Dell OptiPlex Micro i5 8th gen 16GB",
+  "limit": 20,
+  "minPrice": 100,
+  "maxPrice": 250,
+  "mustInclude": ["16GB", "SSD"],
+  "mustExclude": ["No HDD"]
+}
+```
 
 ### `query_ebay_api` — REST API Discovery
 

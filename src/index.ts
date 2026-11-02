@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerOpenApiTools } from "./service/openapi-service.js";
 import { registerGraphQLTools } from "./service/graphql-service.js";
+import { registerListingComparisonTool } from "./service/listing-comparison-service.js";
 import { initializeTokenManager } from "./helper/token-manager.js";
 import { logger } from "./helper/logger.js";
 
@@ -31,6 +32,9 @@ async function main(): Promise<void> {
     // Register the GraphQL tools with the server
     await registerGraphQLTools(server);
     logger.info("Successfully registered GraphQL tools");
+
+    registerListingComparisonTool(server);
+    logger.info("Successfully registered listing comparison tool");
 
     // Create and connect server transport
     const transport = new StdioServerTransport();
